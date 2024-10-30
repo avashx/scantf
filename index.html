@@ -1,35 +1,71 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Handwritten Font Generator</title>
+  <meta charset="UTF-8">
+  <title>Font Extractor</title>
+  <link rel="stylesheet" href="styles.css">
+    
+    
+    <style>
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+  margin: 0;
+  padding: 0;
+}
+
+h1 {
+  color: #333;
+}
+
+#progress, #result {
+  margin-top: 20px;
+}
+
+button {
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+      
+  </style>
 </head>
 <body>
-    <h1>Upload Handwritten Document</h1>
-    <form id="uploadForm" enctype="multipart/form-data">
-        <input type="file" name="file" accept="image/*" required>
-        <button type="submit">Upload</button>
-    </form>
-    <script>
-        document.getElementById('uploadForm').onsubmit = async function(event) {
-            event.preventDefault();
-            const formData = new FormData(this);
-            const response = await fetch('/upload', {
-                method: 'POST',
-                body: formData
-            });
-            if (response.ok) {
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'handwritten_font.ttf';
-                a.click();
-            } else {
-                console.error('Upload failed:', await response.json());
-            }
-        };
-    </script>
+  <h1>Extract Font from Image or PDF</h1>
+  <input type="file" id="fileUpload" accept="image/*,.pdf">
+  <button onclick="startProcess()">Upload and Process</button>
+  <div id="progress"></div>
+  <div id="result"></div>
+  <script>function startProcess() {
+  const file = document.getElementById('fileUpload').files[0];
+  if (!file) {
+    alert('Please upload an image or PDF file.');
+    return;
+  }
+  
+  const formData = new FormData();
+  formData.append("file", file);
+  
+  document.getElementById("progress").innerHTML = "Uploading...";
+  
+  fetch('/upload', {
+    method: 'POST',
+    body: formData
+  })
+  .then(response => response.json())
+  .then(data => {
+    document.getElementById("progress").innerHTML = data.message;
+    if (data.success) {
+      document.getElementById("result").innerHTML = `<a href="${data.font_url}" download>Download Font (.ttf)</a>`;
+    }
+  });
+}
+</script>
 </body>
 </html>
