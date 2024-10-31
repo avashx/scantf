@@ -2,84 +2,195 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Image/PDF Preview App</title>
-<style>
+    <title>File Upload, Preview, and Character Extraction</title>
+  <style>
 
-body {
-    font-family: Arial, sans-serif;
-    text-align: center;
-    padding: 20px;
-}
 
-.upload-section {
-    margin: 20px;
-}
-
-#preview-section {
+#character-extraction {
     margin-top: 20px;
+    padding: 15px;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    max-width: 90%;
+    margin: 20px auto;
+    text-align: center;
 }
 
-#imagePreview {
-    max-width: 100%;
-    max-height: 500px;
+#characterContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+.character-box {
+    display: inline-block;
     border: 1px solid #ccc;
+    padding: 5px;
+    text-align: center;
+    border-radius: 5px;
+    background-color: #f9f9f9;
 }
 
-#pdfPreview {
-    width: 100%;
-    height: 500px;
-    border: 1px solid #ccc;
+.character-box img {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+}
+
+.character-box span {
+    display: block;
+    font-size: 14px;
+    color: #333;
+    margin-top: 4px;
 }
 
 
-</style>
+  </style>
 </head>
 <body>
-    <h1>Upload and Preview Image/PDF</h1>
+    <h1>Upload, Preview, and Extract Characters</h1>
 
-    <div class="upload-section">
-        <input type="file" id="fileUpload" accept="image/*,.pdf">
-        <button onclick="previewFile()">Preview File</button>
+    <div id="upload-section">
+        <input type="file" id="fileUpload" accept="image/*,application/pdf">
+        <button onclick="previewFile()">Preview</button>
+        <button onclick="extractCharacters()">Extract Characters</button>
     </div>
 
-    <div id="preview-section">
-        <h2>File Preview</h2>
-        <img id="imagePreview" style="display:none;" />
-        <iframe id="pdfPreview" style="display:none;"></iframe>
+    <div id="preview-container">
+        <h2>File Preview:</h2>
+        <img id="imagePreview" style="display: none;" alt="Image Preview">
+        <canvas id="pdfPreview" style="display: none;"></canvas>
     </div>
 
+    <div id="character-extraction">
+        <h2>Extracted Characters:</h2>
+        <div id="characterContainer"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.1/dist/tesseract.min.js"></script>
     <script>
 
+// Preview the uploaded file (similar to the previous setup)
 function previewFile() {
-    const fileInput = document.getElementById('fileUpload');
-    const file = fileInput.files[0];
-    const imagePreview = document.getElementById('imagePreview');
-    const pdfPreview = document.getElementById('pdfPreview');
-
-    if (!file) {
-        alert("Please upload an image or PDF.");
+    const fileInput = document.getElementById("fileUpload").files[0];
+    if (!fileInput) {
+        alert("Please upload a file.");
         return;
     }
 
-    // Handle image files
-    if (file.type.startsWith("image/")) {
+    const imagePreview = document.getElementById("imagePreview");
+    const pdfPreview = document.getElementById("pdfPreview");
+
+    if (fileInput.type.startsWith("image/")) {
         const reader = new FileReader();
         reader.onload = function (e) {
             imagePreview.src = e.target.result;
             imagePreview.style.display = "block";
             pdfPreview.style.display = "none";
         };
-        reader.readAsDataURL(file);
-    }
-    // Handle PDF files
-    else if (file.type === "application/pdf") {
-        const fileURL = URL.createObjectURL(file);
-        pdfPreview.src = fileURL;
-        pdfPreview.style.display = "block";
+        reader.readAsDataURL(fileInput);
+    } else if (fileInput.type === "application/pdf") {
         imagePreview.style.display = "none";
+        pdfPreview.style.display = "block";
+        renderPDF(fileInput, pdfPreview);
     } else {
         alert("Unsupported file type. Please upload an image or PDF.");
     }
+}
+
+// Render the PDF (unchanged)
+function renderPDF(file, canvas) {
+    const fileReader = new FileReader();
+    fileReader.onload = function () {
+        const typedArray = new Uint8Array(this.result);
+        pdfjsLib.getDocument(typedArray).promise.then(pdf => {
+            pdf.getPage(1).then(page => {
+                const viewport = page.getViewport({ scale: 1.5 });
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+
+                const renderContext = {
+                    canvasContext: canvas.getContext('2d'),
+                    viewport: viewport
+                };
+                page.render(renderContext);
+            });
+        });
+    };
+    fileReader.readAsArrayBuffer(file);
+}
+
+// Function to extract individual characters
+function extractCharacters() {
+    const fileInput = document.getElementById("fileUpload").files[0];
+    if (!fileInput) {
+        alert("Please upload a file.");
+        return;
+    }
+
+    if (fileInput.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            processImageForCharacters(e.target.result);
+        };
+        reader.readAsDataURL(fileInput);
+    } else if (fileInput.type === "application/pdf") {
+        const canvas = document.getElementById("pdfPreview");
+        const imageURL = canvas.toDataURL();
+        processImageForCharacters(imageURL);
+    }
+}
+
+// Process the image to detect and crop characters
+function processImageForCharacters(imageSrc) {
+    const characterContainer = document.getElementById("characterContainer");
+    characterContainer.innerHTML = ""; // Clear any previous results
+
+    Tesseract.recognize(imageSrc, 'eng', {
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    })
+    .then(result => {
+        const characters = result.data.words;
+
+        characters.forEach(charData => {
+            const { text, bbox } = charData;
+            const x = bbox.x0;
+            const y = bbox.y0;
+            const width = bbox.x1 - bbox.x0;
+            const height = bbox.y1 - bbox.y0;
+
+            // Create canvas to crop character
+            const img = new Image();
+            img.src = imageSrc;
+            img.onload = function () {
+                const canvas = document.createElement("canvas");
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext("2d");
+                ctx.drawImage(img, x, y, width, height, 0, 0, width, height);
+
+                // Create a display box for each character
+                const characterBox = document.createElement("div");
+                characterBox.classList.add("character-box");
+
+                const charImage = document.createElement("img");
+                charImage.src = canvas.toDataURL();
+                characterBox.appendChild(charImage);
+
+                const label = document.createElement("span");
+                label.textContent = `Character: ${text}`;
+                characterBox.appendChild(label);
+
+                characterContainer.appendChild(characterBox);
+            };
+        });
+    })
+    .catch(error => {
+        console.error("Error extracting characters:", error);
+    });
 }
 
 
