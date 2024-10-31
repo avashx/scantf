@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Font Extractor</title>
-  <link rel="stylesheet" href="styles.css">
+  
     
     
     <style>
@@ -37,35 +37,60 @@ button:hover {
   </style>
 </head>
 <body>
-  <h1>Extract Font from Image or PDF</h1>
-  <input type="file" id="fileUpload" accept="image/*,.pdf">
-  <button onclick="startProcess()">Upload and Process</button>
-  <div id="progress"></div>
-  <div id="result"></div>
-  <script>function startProcess() {
-  const file = document.getElementById('fileUpload').files[0];
-  if (!file) {
-    alert('Please upload an image or PDF file.');
-    return;
-  }
-  
-  const formData = new FormData();
-  formData.append("file", file);
-  
-  document.getElementById("progress").innerHTML = "Uploading...";
-  
-  fetch('/upload', {
-    method: 'POST',
-    body: formData
-  })
-  .then(response => response.json())
-  .then(data => {
-    document.getElementById("progress").innerHTML = data.message;
-    if (data.success) {
-      document.getElementById("result").innerHTML = `<a href="${data.font_url}" download>Download Font (.ttf)</a>`;
+  <form id="uploadForm" enctype="multipart/form-data">
+    <input type="file" id="imageUpload" accept="image/*" required />
+    <button type="submit">Upload</button>
+</form>
+<div id="output"></div>
+
+  <script>
+
+document.getElementById('uploadForm').addEventListener('submit', function(event) {
+    event.preventDefault();
+    const fileInput = document.getElementById('imageUpload');
+    const formData = new FormData();
+    formData.append('image', fileInput.files[0]);
+
+    fetch('/upload', {
+        method: 'POST',
+        body: formData,
+    })
+    .then(response => response.json())
+    .then(data => {
+        displayOutput(data);
+    })
+    .catch(error => console.error('Error:', error));
+});
+
+
+
+
+const express = require('express');
+const multer = require('multer');
+const { processImage } = require('./imageProcessor'); // Function to process image
+const app = express();
+const upload = multer({ dest: 'uploads/' });
+
+app.post('/upload', upload.single('image'), async (req, res) => {
+    const result = await processImage(req.file.path);
+    res.json(result);
+});
+
+
+
+
+function displayOutput(data) {
+    const outputDiv = document.getElementById('output');
+    outputDiv.innerHTML = '';
+
+    for (const [letter, image] of Object.entries(data)) {
+        const imgElement = document.createElement('img');
+        imgElement.src = `data:image/png;base64,${image}`; // Assuming image is in base64
+        imgElement.alt = letter;
+        outputDiv.appendChild(imgElement);
     }
-  });
 }
+
 </script>
 </body>
 </html>
