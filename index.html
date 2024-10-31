@@ -219,40 +219,6 @@ function extractTextFromPDF(file, textElement) {
 
 
 
-
-function previewFile() {
-    const fileInput = document.getElementById('fileUpload');
-    const file = fileInput.files[0];
-    const imagePreview = document.getElementById('imagePreview');
-    const pdfPreview = document.getElementById('pdfPreview');
-
-    if (!file) {
-        alert("Please upload an image or PDF.");
-        return;
-    }
-
-    // Handle image files
-    if (file.type.startsWith("image/")) {
-        const reader = new FileReader();
-        reader.onload = function (e) {
-            imagePreview.src = e.target.result;
-            imagePreview.style.display = "block";
-            pdfPreview.style.display = "none";
-        };
-        reader.readAsDataURL(file);
-    }
-    // Handle PDF files
-    else if (file.type === "application/pdf") {
-        const fileURL = URL.createObjectURL(file);
-        pdfPreview.src = fileURL;
-        pdfPreview.style.display = "block";
-        imagePreview.style.display = "none";
-    } else {
-        alert("Unsupported file type. Please upload an image or PDF.");
-    }
-}
-
-
     </script>
 </body>
 </html>
