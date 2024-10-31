@@ -1,26 +1,45 @@
-import cv2
+from flask import Flask, render_template, request, jsonify
+from pdf2image import convert_from_path
+from PIL import Image
 import pytesseract
 import os
 
-def process_image(image_path):
-    image = cv2.imread(image_path)
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
-    # Find contours
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+app = Flask(__name__)
 
-    letters = []
-    for cnt in contours:
-        x, y, w, h = cv2.boundingRect(cnt)
-        letter_img = image[y:y+h, x:x+w]
-        letters.append(letter_img)
+# Route for rendering the HTML template
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-    output = {}
-    for letter in letters:
-        # Recognize the letter (optional)
-        letter_text = pytesseract.image_to_string(letter, config='--psm 10')
-        letter_text = letter_text.strip().lower()
-        if letter_text.isalpha():
-            output[letter_text] = letter
+# Route for handling file upload and OCR processing
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    file = request.files['file']
+    file_path = os.path.join('uploads', file.filename)
+    file.save(file_path)
 
-    return output
+    # Convert PDF to images if necessary
+    if file.filename.endswith('.pdf'):
+        images = convert_from_path(file_path)
+    else:
+        images = [Image.open(file_path)]
+
+    # Extract text from each image
+    extracted_text = ""
+    for image in images:
+        extracted_text += pytesseract.image_to_string(image)
+
+    # Determine visible alphabets in extracted text
+    visible_alphabets = sorted(set([char.lower() for char in extracted_text if char.isalpha()]))
+
+    # Cleanup: remove the uploaded file
+    os.remove(file_path)
+
+    # Return the processed text and visible alphabets
+    return jsonify({
+        'text': extracted_text,
+        'visible_alphabets': visible_alphabets
+    })
+
+if __name__ == '__main__':
+    app.run(debug=True)
