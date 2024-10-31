@@ -1,38 +1,53 @@
-function startProcess() {
-    const file = document.getElementById('fileUpload').files[0];
+function uploadFile() {
+    const fileInput = document.getElementById('fileUpload');
+    const file = fileInput.files[0];
+
     if (!file) {
-        alert('Please upload an image or PDF file.');
+        alert("Please upload an image or PDF.");
         return;
+    }
+
+    // Show file preview if it's an image
+    const preview = document.getElementById('uploadedImage');
+    if (file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            preview.src = e.target.result;
+            preview.style.display = "block";
+        };
+        reader.readAsDataURL(file);
     }
 
     const formData = new FormData();
     formData.append("file", file);
 
-    // Use the Render or Heroku backend URL here
-    const backendUrl = "https://your-app-name.onrender.com/upload";
+    document.getElementById("progress").innerHTML = "Processing file...";
 
-    document.getElementById("progress").innerHTML = "Uploading and processing file...";
-
-    fetch(backendUrl, {
+    fetch('/upload', {
         method: 'POST',
         body: formData
     })
     .then(response => response.json())
     .then(data => {
         document.getElementById("progress").innerHTML = "Processing complete!";
-        document.getElementById("extractedText").innerText = data.text;
-
-        // Highlight visible alphabets
-        let alphabetHTML = '';
-        for (let charCode = 97; charCode <= 122; charCode++) {
-            let char = String.fromCharCode(charCode);
-            if (data.visible_alphabets.includes(char)) {
-                alphabetHTML += `<span class="highlighted">${char.toUpperCase()}</span> `;
-            } else {
-                alphabetHTML += `<span>${char.toUpperCase()}</span> `;
-            }
+        
+        // Update alphabetic character count
+        const alphabetCountList = document.getElementById("alphabetCount");
+        alphabetCountList.innerHTML = "";
+        for (const [char, count] of Object.entries(data.alphabet_count)) {
+            alphabetCountList.innerHTML += `<li>${char.toUpperCase()}: ${count}</li>`;
         }
-        document.getElementById("visibleAlphabets").innerHTML = alphabetHTML;
+
+        // Display cropped alphabet images
+        const croppedImagesContainer = document.getElementById("croppedImagesContainer");
+        croppedImagesContainer.innerHTML = "";
+        for (const [char, imagePath] of Object.entries(data.alphabet_images)) {
+            const img = document.createElement("img");
+            img.src = imagePath;
+            img.alt = char;
+            img.title = char.toUpperCase();
+            croppedImagesContainer.appendChild(img);
+        }
     })
     .catch(error => {
         console.error('Error:', error);

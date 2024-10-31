@@ -1,12 +1,23 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from pdf2image import convert_from_path
 from PIL import Image
 import pytesseract
 import os
+import re
 
 app = Flask(__name__)
 
-# Route for rendering the HTML template
+UPLOAD_FOLDER = 'uploads'
+CROPPED_FOLDER = 'static/cropped_letters'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['CROPPED_FOLDER'] = CROPPED_FOLDER
+
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+if not os.path.exists(CROPPED_FOLDER):
+    os.makedirs(CROPPED_FOLDER)
+
+# Route for the index page
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -15,31 +26,54 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload_file():
     file = request.files['file']
-    file_path = os.path.join('uploads', file.filename)
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
     file.save(file_path)
 
-    # Convert PDF to images if necessary
+    # Convert PDF to images if it's a PDF file
     if file.filename.endswith('.pdf'):
         images = convert_from_path(file_path)
     else:
         images = [Image.open(file_path)]
 
-    # Extract text from each image
+    # Initialize counters and data holders
     extracted_text = ""
+    alphabet_count = {}
+    alphabet_images = {}
+
     for image in images:
-        extracted_text += pytesseract.image_to_string(image)
+        # Extract text and count alphabetic characters
+        text = pytesseract.image_to_string(image)
+        extracted_text += text
 
-    # Determine visible alphabets in extracted text
-    visible_alphabets = sorted(set([char.lower() for char in extracted_text if char.isalpha()]))
+        for char in text:
+            if char.isalpha():
+                alphabet_count[char.lower()] = alphabet_count.get(char.lower(), 0) + 1
 
-    # Cleanup: remove the uploaded file
-    os.remove(file_path)
+        # Detect bounding boxes for each character
+        data = pytesseract.image_to_boxes(image)
+        for d in data.splitlines():
+            parts = d.split()
+            char = parts[0].lower()
+            if 'a' <= char <= 'z':  # Ensure it's a lowercase alphabet
+                x, y, w, h = int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])
+                cropped = image.crop((x, image.height - h, w, image.height - y))
+                char_path = os.path.join(app.config['CROPPED_FOLDER'], f"{char}.png")
+                cropped.save(char_path)
+                alphabet_images[char] = f"/static/cropped_letters/{char}.png"
 
-    # Return the processed text and visible alphabets
+    os.remove(file_path)  # Clean up uploaded file
+
+    # Return processed text, alphabet counts, and cropped images
     return jsonify({
         'text': extracted_text,
-        'visible_alphabets': visible_alphabets
+        'alphabet_count': alphabet_count,
+        'alphabet_images': alphabet_images
     })
+
+# Serve cropped letter images
+@app.route('/static/cropped_letters/<filename>')
+def cropped_letter(filename):
+    return send_from_directory(app.config['CROPPED_FOLDER'], filename)
 
 if __name__ == '__main__':
     app.run(debug=True)
