@@ -2,67 +2,269 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Alphabet Extractor</title>
-    <link rel="stylesheet" href="static/styles.css">
-    <style>
+    <title>Image/PDF Preview App</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.1/dist/tesseract.min.js"></script>
+
+<style>
+#text-extraction {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    max-width: 90%;
+    margin: 20px auto;
+    text-align: left;
+}
+
+pre {
+    white-space: pre-wrap;
+    text-align: left;
+}
 
 body {
     font-family: Arial, sans-serif;
     text-align: center;
     padding: 20px;
-    background-color: #f5f5f5;
 }
 
-#result-sections {
-    display: flex;
-    justify-content: space-around;
+.upload-section {
+    margin: 20px;
+}
+
+#preview-section {
     margin-top: 20px;
 }
 
-#file-preview, #stats, #alphabet-images {
-    width: 30%;
-    padding: 10px;
-    background: #fff;
-    border-radius: 5px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+#imagePreview {
+    max-width: 100%;
+    max-height: 500px;
+    border: 1px solid #ccc;
 }
 
-#alphabet-images img {
-    width: 50px;
-    height: 50px;
-    margin: 5px;
+#pdfPreview {
+    width: 100%;
+    height: 500px;
+    border: 1px solid #ccc;
 }
 
 
-    </style>
+</style>
 </head>
 <body>
-    <h1>Alphabet Extractor Web App</h1>
+    <h1>Upload and Preview Image/PDF</h1>
 
-    <div>
+    <div class="upload-section">
         <input type="file" id="fileUpload" accept="image/*,.pdf">
-        <button onclick="uploadFile()">Upload and Process</button>
+        <button onclick="previewFile()">Preview File</button>
     </div>
 
-    <div id="progress">Status: Waiting for upload...</div>
-
-    <div id="result-sections">
-        <div id="file-preview">
-            <h2>File Preview</h2>
-            <img id="uploadedImage" src="#" alt="Preview" style="display:none;">
-        </div>
-
-        <div id="stats">
-            <h2>Alphabetic Character Count</h2>
-            <ul id="alphabetCount"></ul>
-        </div>
-
-        <div id="alphabet-images">
-            <h2>Cropped Alphabets (A-Z)</h2>
-            <div id="croppedImagesContainer"></div>
-        </div>
+    <div id="preview-section">
+        <h2>File Preview</h2>
+        <img id="imagePreview" style="display:none;" />
+        <iframe id="pdfPreview" style="display:none;"></iframe>
     </div>
 
-    <script src="static/app.js"></script>
+<hr>
+
+<h1>Upload, Preview, and Extract Text</h1>
+
+<div id="upload-section">
+    <input type="file" id="fileUpload" accept="image/*,application/pdf">
+    <button onclick="previewFile()">Preview</button>
+    <button onclick="extractText()">Extract Text</button>
+</div>
+
+<div id="preview-container">
+    <h2>File Preview:</h2>
+    <img id="imagePreview" style="display: none;" alt="Image Preview">
+    <canvas id="pdfPreview" style="display: none;"></canvas>
+</div>
+
+<div id="text-extraction">
+    <h2>Extracted Text:</h2>
+    <pre id="extractedText"></pre>
+</div>
+
+
+
+
+
+
+
+
+
+    <script>
+
+
+
+// Preview the uploaded file
+function previewFile() {
+    const fileInput = document.getElementById("fileUpload").files[0];
+    if (!fileInput) {
+        alert("Please upload a file.");
+        return;
+    }
+
+    const imagePreview = document.getElementById("imagePreview");
+    const pdfPreview = document.getElementById("pdfPreview");
+
+    if (fileInput.type.startsWith("image/")) {
+        // Image preview
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            imagePreview.src = e.target.result;
+            imagePreview.style.display = "block";
+            pdfPreview.style.display = "none";
+        };
+        reader.readAsDataURL(fileInput);
+    } else if (fileInput.type === "application/pdf") {
+        // PDF preview using PDF.js
+        imagePreview.style.display = "none";
+        pdfPreview.style.display = "block";
+        renderPDF(fileInput, pdfPreview);
+    } else {
+        alert("Unsupported file type. Please upload an image or PDF.");
+    }
+}
+
+// Render the PDF using PDF.js and show the first page as preview
+function renderPDF(file, canvas) {
+    const fileReader = new FileReader();
+    fileReader.onload = function () {
+        const typedArray = new Uint8Array(this.result);
+        pdfjsLib.getDocument(typedArray).promise.then(pdf => {
+            pdf.getPage(1).then(page => {
+                const viewport = page.getViewport({ scale: 1.5 });
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+
+                const renderContext = {
+                    canvasContext: canvas.getContext('2d'),
+                    viewport: viewport
+                };
+                page.render(renderContext);
+            });
+        });
+    };
+    fileReader.readAsArrayBuffer(file);
+}
+
+// Extract text using Tesseract.js
+function extractText() {
+    const fileInput = document.getElementById("fileUpload").files[0];
+    const extractedTextElement = document.getElementById("extractedText");
+    extractedTextElement.textContent = "Extracting text...";
+
+    if (!fileInput) {
+        alert("Please upload a file.");
+        return;
+    }
+
+    if (fileInput.type.startsWith("image/")) {
+        // Extract text from image
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            Tesseract.recognize(e.target.result, 'eng')
+                .then(result => {
+                    extractedTextElement.textContent = result.data.text;
+                })
+                .catch(error => {
+                    console.error("Error:", error);
+                    extractedTextElement.textContent = "Text extraction failed.";
+                });
+        };
+        reader.readAsDataURL(fileInput);
+    } else if (fileInput.type === "application/pdf") {
+        // Extract text from PDF
+        extractTextFromPDF(fileInput, extractedTextElement);
+    } else {
+        extractedTextElement.textContent = "Unsupported file type for text extraction.";
+    }
+}
+
+// Extract text from PDF using PDF.js and Tesseract.js
+function extractTextFromPDF(file, textElement) {
+    const fileReader = new FileReader();
+    fileReader.onload = function () {
+        const typedArray = new Uint8Array(this.result);
+        pdfjsLib.getDocument(typedArray).promise.then(pdf => {
+            let textContent = "";
+            const pagePromises = [];
+
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                pagePromises.push(
+                    pdf.getPage(pageNum).then(page => {
+                        const viewport = page.getViewport({ scale: 1.5 });
+                        const canvas = document.createElement('canvas');
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+
+                        const renderContext = {
+                            canvasContext: canvas.getContext('2d'),
+                            viewport: viewport
+                        };
+
+                        return page.render(renderContext).promise.then(() => {
+                            return Tesseract.recognize(canvas, 'eng');
+                        }).then(result => {
+                            textContent += result.data.text + "\n";
+                        });
+                    })
+                );
+            }
+
+            // Wait for all pages to be processed
+            Promise.all(pagePromises).then(() => {
+                textElement.textContent = textContent || "No text found in the PDF.";
+            }).catch(error => {
+                console.error("Error:", error);
+                textElement.textContent = "Text extraction failed.";
+            });
+        });
+    };
+    fileReader.readAsArrayBuffer(file);
+}
+
+
+
+
+
+
+function previewFile() {
+    const fileInput = document.getElementById('fileUpload');
+    const file = fileInput.files[0];
+    const imagePreview = document.getElementById('imagePreview');
+    const pdfPreview = document.getElementById('pdfPreview');
+
+    if (!file) {
+        alert("Please upload an image or PDF.");
+        return;
+    }
+
+    // Handle image files
+    if (file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            imagePreview.src = e.target.result;
+            imagePreview.style.display = "block";
+            pdfPreview.style.display = "none";
+        };
+        reader.readAsDataURL(file);
+    }
+    // Handle PDF files
+    else if (file.type === "application/pdf") {
+        const fileURL = URL.createObjectURL(file);
+        pdfPreview.src = fileURL;
+        pdfPreview.style.display = "block";
+        imagePreview.style.display = "none";
+    } else {
+        alert("Unsupported file type. Please upload an image or PDF.");
+    }
+}
+
+
+    </script>
 </body>
 </html>
