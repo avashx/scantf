@@ -1,0 +1,210 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload, Preview, and Single Character Extraction</title>
+    <style>
+
+#character-extraction {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    max-width: 90%;
+    margin: 20px auto;
+    text-align: center;
+}
+
+#singleCharacterContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+.character-box {
+    display: inline-block;
+    border: 1px solid #ccc;
+    padding: 10px;
+    text-align: center;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+}
+
+.character-box img {
+    width: 50px;
+    height: 50px;
+    object-fit: contain;
+}
+
+.character-box span {
+    display: block;
+    font-size: 14px;
+    color: #333;
+    margin-top: 4px;
+}
+
+
+    </style>
+</head>
+<body>
+    <h1>Upload, Preview, and Extract a Specific Character</h1>
+
+    <div id="upload-section">
+        <input type="file" id="fileUpload" accept="image/*,application/pdf">
+        <button onclick="previewFile()">Preview</button>
+    </div>
+
+    <div id="character-select-section">
+        <label for="characterInput">Character to Extract:</label>
+        <input type="text" id="characterInput" maxlength="1" placeholder="Enter A-Z, a-z, or 0-9">
+        <button onclick="extractSingleCharacter()">Extract Character</button>
+    </div>
+
+    <div id="preview-container">
+        <h2>File Preview:</h2>
+        <img id="imagePreview" style="display: none;" alt="Image Preview">
+        <canvas id="pdfPreview" style="display: none;"></canvas>
+    </div>
+
+    <div id="character-extraction">
+        <h2>Extracted Character:</h2>
+        <div id="singleCharacterContainer"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.1/dist/tesseract.min.js"></script>
+    <script>
+        function previewFile() {
+            const fileInput = document.getElementById("fileUpload").files[0];
+            if (!fileInput) {
+                alert("Please upload a file.");
+                return;
+            }
+        
+            const imagePreview = document.getElementById("imagePreview");
+            const pdfPreview = document.getElementById("pdfPreview");
+        
+            if (fileInput.type.startsWith("image/")) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    imagePreview.src = e.target.result;
+                    imagePreview.style.display = "block";
+                    pdfPreview.style.display = "none";
+                };
+                reader.readAsDataURL(fileInput);
+            } else if (fileInput.type === "application/pdf") {
+                imagePreview.style.display = "none";
+                pdfPreview.style.display = "block";
+                renderPDF(fileInput, pdfPreview);
+            } else {
+                alert("Unsupported file type. Please upload an image or PDF.");
+            }
+        }
+        
+        // Render the PDF using PDF.js (unchanged)
+        function renderPDF(file, canvas) {
+            const fileReader = new FileReader();
+            fileReader.onload = function () {
+                const typedArray = new Uint8Array(this.result);
+                pdfjsLib.getDocument(typedArray).promise.then(pdf => {
+                    pdf.getPage(1).then(page => {
+                        const viewport = page.getViewport({ scale: 1.5 });
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+        
+                        const renderContext = {
+                            canvasContext: canvas.getContext('2d'),
+                            viewport: viewport
+                        };
+                        page.render(renderContext);
+                    });
+                });
+            };
+            fileReader.readAsArrayBuffer(file);
+        }
+        
+        // Function to extract the specified character
+        function extractSingleCharacter() {
+            const fileInput = document.getElementById("fileUpload").files[0];
+            const character = document.getElementById("characterInput").value;
+        
+            if (!fileInput) {
+                alert("Please upload a file.");
+                return;
+            }
+        
+            if (!character || character.length !== 1) {
+                alert("Please enter a single character.");
+                return;
+            }
+        
+            if (fileInput.type.startsWith("image/")) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    processImageForSingleCharacter(e.target.result, character);
+                };
+                reader.readAsDataURL(fileInput);
+            } else if (fileInput.type === "application/pdf") {
+                const canvas = document.getElementById("pdfPreview");
+                const imageURL = canvas.toDataURL();
+                processImageForSingleCharacter(imageURL, character);
+            }
+        }
+        
+        // Process the image to detect and crop a single character
+        function processImageForSingleCharacter(imageSrc, targetCharacter) {
+            const singleCharacterContainer = document.getElementById("singleCharacterContainer");
+            singleCharacterContainer.innerHTML = ""; // Clear previous result
+        
+            Tesseract.recognize(imageSrc, 'eng', {
+                tessedit_char_whitelist: targetCharacter // Only recognize the target character
+            })
+            .then(result => {
+                const characters = result.data.words.filter(word => word.text === targetCharacter);
+        
+                if (characters.length === 0) {
+                    singleCharacterContainer.innerHTML = `<p>Character "${targetCharacter}" not found in the document.</p>`;
+                    return;
+                }
+        
+                characters.forEach(charData => {
+                    const { text, bbox } = charData;
+                    const x = bbox.x0;
+                    const y = bbox.y0;
+                    const width = bbox.x1 - bbox.x0;
+                    const height = bbox.y1 - bbox.y0;
+        
+                    const img = new Image();
+                    img.src = imageSrc;
+                    img.onload = function () {
+                        const canvas = document.createElement("canvas");
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext("2d");
+                        ctx.drawImage(img, x, y, width, height, 0, 0, width, height);
+        
+                        // Display the cropped character
+                        const characterBox = document.createElement("div");
+                        characterBox.classList.add("character-box");
+        
+                        const charImage = document.createElement("img");
+                        charImage.src = canvas.toDataURL();
+                        characterBox.appendChild(charImage);
+        
+                        const label = document.createElement("span");
+                        label.textContent = `Character: ${text}`;
+                        characterBox.appendChild(label);
+        
+                        singleCharacterContainer.appendChild(characterBox);
+                    };
+                });
+            })
+            .catch(error => {
+                console.error("Error extracting character:", error);
+                singleCharacterContainer.innerHTML = "<p>Error occurred while extracting character.</p>";
+            });
+        }
+        </script>
+</body>
+</html>
